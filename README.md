@@ -1,0 +1,1 @@
+# PodstawySieciNeuronowych_P2
