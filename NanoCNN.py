@@ -28,7 +28,7 @@ class Config:
     test_dir: str = "test"
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     fast_end: bool = False
-    target_loss: float = 0.005
+    target_loss: float = 0.01
 
 def init_environment(seed):
     torch.manual_seed(seed)
