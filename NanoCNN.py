@@ -105,6 +105,7 @@ class NanoEncoder(nn.Module):
 
         x = self.pool(x)
         x = torch.flatten(x, 1)
+        x = self.dropout(x)
         return self.head(x)
 
 # --- 4. ANALIZA WYNIKÓW ---
@@ -136,6 +137,82 @@ def plot_results(history, model):
     plt.tight_layout()
     plt.show()
 
+def print_class_statistics(model, loader, device, num_classes=10):
+    model.eval()
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for x, y in loader:
+            x, y = x.to(device), y.to(device)
+            outputs = model(x)
+            preds = outputs.argmax(1)
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
+
+    # Obliczanie macierzy pomyłek
+    cm = confusion_matrix(all_labels, all_preds, labels=list(range(num_classes)))
+
+    stats = []
+    for i in range(num_classes):
+        correct = cm[i, i]
+        total = cm[i, :].sum()
+        wrong = total - correct
+        accuracy = (correct / total) * 100 if total > 0 else 0
+        stats.append([i, correct, wrong, f"{accuracy:.2f}%"])
+
+    df_stats = pd.DataFrame(stats, columns=['Klasa', 'Poprawne', 'Błędne', 'Trafność %'])
+    print("\n--- STATYSTYKI KLAS ---")
+    print(df_stats.to_string(index=False))
+    return df_stats
+
+def visualize_examples(model, loader, device):
+    model.eval()
+    good_example = None
+    bad_example = None
+
+    with torch.no_grad():
+        for x, y in loader:
+            x_dev = x.to(device)
+            outputs = model(x_dev)
+            preds = outputs.argmax(1).cpu()
+
+            for i in range(len(y)):
+                img = x[i].squeeze().numpy()
+                true_label = y[i].item()
+                pred_label = preds[i].item()
+
+                if true_label == pred_label and good_example is None:
+                    good_example = (img, true_label, pred_label)
+                elif true_label != pred_label and bad_example is None:
+                    bad_example = (img, true_label, pred_label)
+
+                if good_example and bad_example:
+                    break
+            if good_example and bad_example:
+                break
+
+    # Rysowanie
+    plt.figure(figsize=(10, 5))
+
+    # Dobry przykład
+    plt.subplot(1, 2, 1)
+    if good_example:
+        plt.imshow(good_example[0], cmap='gray')
+        plt.title(f"POPRAWNA\nFaktyczna: {good_example[1]} | Model: {good_example[2]}", color='green')
+    plt.axis('off')
+
+    # Zły przykład
+    plt.subplot(1, 2, 2)
+    if bad_example:
+        plt.imshow(bad_example[0], cmap='gray')
+        plt.title(f"BŁĘDNA\nFaktyczna: {bad_example[1]} | Model: {bad_example[2]}", color='red')
+    else:
+        plt.text(0.5, 0.5, "Nie znaleziono błędnego przykładu!", ha='center')
+    plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
 # --- 5. PĘTLA GŁÓWNA ---
 def main():
     cfg = Config()
@@ -199,6 +276,8 @@ def main():
 
         if cfg.fast_end and epoch_train_mse <= cfg.target_loss: break
 
+    print_class_statistics(model, test_loader, cfg.device, cfg.num_classes)
+    visualize_examples(model, test_loader, cfg.device)
     plot_results(history, model)
 
 
